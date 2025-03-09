@@ -1,8 +1,62 @@
+function mySlice(array, start, end) {
+    const length = array.length;
+    const normalizedStart = start < 0 ? Math.max(length + start, 0) : Math.min(start, length);
+    const normalizedEnd = end < 0 ? Math.max(length + end, 0) : Math.min(end, length);
+
+    const newLength = Math.max(normalizedEnd - normalizedStart, 0);
+    const result = new Array(newLength);
+
+    for (let i = 0; i < newLength; i++) {
+        result[i] = array[normalizedStart + i];
+    }
+    return result;
+}
+
+function myPush(array, ...elements) {
+    const originalLength = array.length;
+    const numElements = elements.length;
+
+    for (let i = 0; i < numElements; i++) {
+        array[originalLength + i] = elements[i];
+    }
+    return array.length;
+}
+
+function myReduce(array, callback, initialValue = 0) {
+    const len = array.length;
+    let accumulator = initialValue;
+    let startIndex = 0;
+
+    if (initialValue === undefined) {
+        if (len === 0) {
+            throw new TypeError('Reduce of empty array with no initial value');
+        }
+        accumulator = array[0];
+        startIndex = 1;
+    }
+
+    for (let i = startIndex; i < len; i++) {
+        accumulator = callback(accumulator, array[i], i, array);
+    }
+    return accumulator;
+}
+
 function chunk(array, size = 1) {
-    if (size <= 0) return [];
-    let result = [];
-    for (let i = 0; i < array.length; i += size) {
-        result.push(array.slice(i, i + size));
+    if (!Array.isArray(array)) {
+        throw new TypeError("Input must be an array.");
+    }
+    if (typeof size !== 'number' || !Number.isInteger(size) || size <= 0) {
+        return [];
+    }
+    const len = array.length;
+    if (len === 0) {
+        return [];
+    }
+
+    const numChunks = Math.ceil(len / size);
+    const result = new Array(numChunks);  // pre-allocate
+    for (let i = 0, chunkIndex = 0; i < len; i += size, chunkIndex++) {
+        result[chunkIndex] = mySlice(array, i, i + size); // Reuse mySlice
     }
     return result;
 }
@@ -12,33 +66,63 @@ function compact(array) {
 }
 
 function drop(array, n = 1) {
-    return filter(array, (_, index) => index >= n);
+     if (!Array.isArray(array)) {
+        throw new TypeError("Input must be an array.");
+    }
+    return mySlice(array, n, array.length); // Reuse mySlice
 }
 
 function dropWhile(array, func) {
+    if (!Array.isArray(array)) {
+        throw new TypeError("Input must be an array.");
+    }
+    if (typeof func !== 'function') {
+        throw new TypeError("Predicate must be a function.");
+    }
+
     let dropIndex = 0;
-    while (dropIndex < array.length && func(array[dropIndex], dropIndex, array)) {
+    const len = array.length;
+    while (dropIndex < len && func(array[dropIndex], dropIndex, array)) {
         dropIndex++;
     }
-    return drop(array, dropIndex);
+    return mySlice(array, dropIndex, array.length); //Reuse mySlice
 }
 
 function take(array, n = 1) {
-    return filter(array, (_, index) => index < n);
+    if (!Array.isArray(array)) {
+        throw new TypeError("Input must be an array.");
+    }
+    return mySlice(array, 0, n); // Reuse mySlice
 }
 
 function filter(array, func) {
-    let result = [];
-    for (let i = 0; i < array.length; i++) {
+    if (!Array.isArray(array)) {
+        throw new TypeError("Input must be an array.");
+    }
+    if (typeof func !== 'function') {
+        throw new TypeError("Predicate must be a function.");
+    }
+    const len = array.length;
+    const result = [];
+
+    for (let i = 0; i < len; i++) {
         if (func(array[i], i, array)) {
-            result.push(array[i]);
+            myPush(result, array[i]);  // Reuse myPush
         }
     }
     return result;
 }
 
+
 function find(array, func) {
-    for (let i = 0; i < array.length; i++) {
+   if (!Array.isArray(array)) {
+        throw new TypeError("Input must be an array.");
+    }
+    if (typeof func !== 'function') {
+        throw new TypeError("Predicate must be a function.");
+    }
+    const len = array.length;
+    for (let i = 0; i < len; i++) {
         if (func(array[i], i, array)) {
             return array[i];
         }
@@ -47,33 +131,51 @@ function find(array, func) {
 }
 
 function includes(array, value) {
-    return find(array, (item) => item === value) !== undefined;
+    return find(array, (item) => Object.is(item, value)) !== undefined;
 }
 
 function map(array, iteratee) {
-    let result = [];
-    for (let i = 0; i < array.length; i++) {
-        result.push(iteratee(array[i], i, array));
+    if (!Array.isArray(array)) {
+        throw new TypeError("Input must be an array.");
+    }
+    if (typeof iteratee !== 'function') {
+        throw new TypeError("Iteratee must be a function.");
+    }
+    const len = array.length;
+    const result = new Array(len); // Pre-allocate
+    for (let i = 0; i < len; i++) {
+        result[i] = iteratee(array[i], i, array);
     }
     return result;
 }
-
 function zip(...arrays) {
-    const maxLen = Math.max(...arrays.map(arr => arr.length));
-    return Array.from({ length: maxLen }, (_, i) => arrays.map(arr => arr[i]));
+  if (!arrays.every(Array.isArray)) {
+    throw new TypeError("All inputs must be arrays.");
+  }
+    const maxLen = myReduce(arrays, (max, arr) => Math.max(max, arr.length), 0);  // Reuse myReduce
+    return Array.from({ length: maxLen }, (_, i) =>
+        Array.from({ length: arrays.length }, (_, j) => arrays[j][i])
+    );
 }
 
 function merge(object, ...sources) {
     if (object == null) object = {};
-    for (let source of sources) {
-        if (source != null) {
-            for (let key in source) {
-                if (source[key] !== null && typeof source[key] === 'object' &&
-                    object[key] !== null && typeof object[key] === 'object') {
-                    object[key] = merge(object[key], source[key]);
-                } else {
-                    object[key] = source[key];
-                }
+
+    for (const source of sources) {
+        if (source == null) continue;
+
+        const keys = Object.keys(source);
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            const sourceVal = source[key];
+            const objectVal = object[key];
+
+            if (sourceVal !== null && typeof sourceVal === 'object' && !Array.isArray(sourceVal) &&
+                objectVal !== null && typeof objectVal === 'object' && !Array.isArray(objectVal)) {
+                 object[key] = merge(Object.assign({}, objectVal), sourceVal);
+            }
+           else {
+                object[key] = sourceVal;
             }
         }
     }
@@ -81,41 +183,70 @@ function merge(object, ...sources) {
 }
 
 function omit(object, keys) {
-    const keysLookup = new Set(keys);
-    return filter(Object.keys(object), (key) => !keysLookup.has(key))
-        .reduce((result, key) => {
+    if (object == null) {
+        return {};
+    }
+    const keysSet = new Set(keys); // Convert to Set for efficient lookup
+    return myReduce(Object.keys(object), (result, key) => { // Reuse myReduce
+        if (!keysSet.has(key)) {
             result[key] = object[key];
-            return result;
-        }, {});
+        }
+        return result;
+    }, {});
 }
 
 function omitBy(object, func) {
-    return filter(Object.keys(object), (key) => !func(object[key], key, object))
-        .reduce((result, key) => {
-            result[key] = object[key];
-            return result;
-        }, {});
+    if (object == null) {
+        return {};
+    }
+    if (typeof func !== 'function') {
+        throw new TypeError("Predicate must be a function.");
+    }
+    return myReduce(Object.keys(object), (result, key) => {  // Reuse myReduce
+        if (!func(object[key], key)) {
+             result[key] = object[key];
+        }
+        return result;
+    }, {});
 }
 
 function pick(object, keys) {
-    const keysLookup = new Set(keys);
-    return filter(Object.keys(object), (key) => keysLookup.has(key))
-        .reduce((result, key) => {
+    if (object == null) {
+        return {};
+    }
+    const keysSet = new Set(keys); // Convert to Set for efficient lookup
+     return myReduce(Object.keys(object), (result, key) => { // Reuse myReduce
+        if (keysSet.has(key)) {
             result[key] = object[key];
-            return result;
-        }, {});
+        }
+        return result;
+    }, {});
 }
 
 function pickBy(object, func) {
-    return filter(Object.keys(object), (key) => func(object[key], key, object))
-        .reduce((result, key) => {
-            result[key] = object[key];
-            return result;
-        }, {});
+    if (object == null) {
+        return {};
+    }
+    if (typeof func !== 'function') {
+        throw new TypeError("Predicate must be a function.");
+    }
+
+    return myReduce(Object.keys(object), (result, key) => { // Reuse myReduce
+        if (func(object[key], key)) {
+             result[key] = object[key];
+        }
+        return result;
+    }, {});
 }
 
 function toPairs(object) {
-    return map(Object.keys(object), (key) => [key, object[key]]);
+    if (object == null) {
+        return [];
+    }
+    return myReduce(Object.keys(object), (result, key) => { // Reuse myReduce
+        myPush(result, [key, object[key]]); // Reuse myPush.
+        return result;
+    }, []);
 }
 
 module.exports = {
